@@ -102,6 +102,11 @@ func (c *Conn) SignalPresence(state string) error {
 	return err
 }
 
+func (c *Conn) SliencePresence() error {
+	_, err := fmt.Fprintf(c.out, "<presence><priority>-1</priority></presence>")
+	return err
+}
+
 func (c *Conn) Close() (err error) {
 	return c.xConn.Close()
 }
