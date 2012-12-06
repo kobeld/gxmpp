@@ -20,6 +20,7 @@ const (
 	nsBind    = "urn:ietf:params:xml:ns:xmpp-bind"
 	nsSession = "urn:ietf:params:xml:ns:xmpp-session"
 	nsClient  = "jabber:client"
+	nsMucUser = "http://jabber.org/protocol/muc#user"
 )
 
 // RemoveResourceFromJid returns the user@domain portion of a JID.
@@ -36,6 +37,10 @@ func IsBareJid(jid string) bool {
 		return true
 	}
 	return false
+}
+
+func GetLocalFromJID(jid string) string {
+	return strings.Split(jid, "@")[0]
 }
 
 func SeparateJidAndResource(fullJid string) (bareJid, resource string) {
@@ -97,6 +102,12 @@ func (c *Conn) SendActive(to string) error {
 	return err
 }
 
+func (c *Conn) SendDirectMucInvitation(to string, roomJid string, reason string) error {
+	_, err := fmt.Fprintf(c.out, "<message to='%s' from='%s'><x xmlns='jabber:x:conference' jid='%s' reason='%s'/></message>",
+		xmlEscape(to), xmlEscape(c.Jid), xmlEscape(roomJid), reason)
+	return err
+}
+
 func (c *Conn) SignalPresence(state string) error {
 	_, err := fmt.Fprintf(c.out, "<presence><show>%s</show></presence>", xmlEscape(state))
 	return err
@@ -105,6 +116,18 @@ func (c *Conn) SignalPresence(state string) error {
 func (c *Conn) SliencePresence() error {
 	_, err := fmt.Fprintf(c.out, "<presence><priority>-1</priority></presence>")
 	return err
+}
+
+func (c *Conn) PresenceMuc(to string, isJoined bool) (err error) {
+	if isJoined {
+		_, err = fmt.Fprintf(c.out, "<presence to='%s' from='%s'><x xmlns='http://jabber.org/protocol/muc'/></presence>",
+			xmlEscape(to), xmlEscape(c.Jid))
+	} else {
+		_, err = fmt.Fprintf(c.out, "<presence to='%s' from='%s' type='unavailable'/>",
+			xmlEscape(to), xmlEscape(c.Jid))
+	}
+
+	return
 }
 
 func (c *Conn) Close() (err error) {
@@ -489,6 +512,7 @@ type ClientPresence struct {
 	Status   string `xml:"status"` // sb []clientText
 	Priority string `xml:"priority"`
 	C        PresenceC
+	X        PresenceX    `xml:"x"`
 	Error    *ClientError `xml:"error"`
 }
 
@@ -497,8 +521,33 @@ type PresenceC struct {
 	Node    string   `xml:"node,attr"`
 }
 
+type PresenceX struct {
+	XMLName xml.Name        `xml:"jabber:client x`
+	Item    MucPresenceItem `xml:"item"`
+}
+
+type MucPresenceItem struct {
+	Affiliation string `xml:"affiliation,attr"`
+	Role        string `xml:"role,attr"`
+	Jid         string `xml:"jid,attr"`
+}
+
+func (this *ClientPresence) IsMUC() bool {
+	if this.X.XMLName.Space == nsMucUser {
+		return true
+	}
+	return false
+}
+
 func (this *ClientPresence) IsOnline() bool {
 	if this.Type == "" {
+		return true
+	}
+	return false
+}
+
+func (this *ClientPresence) IsUnavailable() bool {
+	if this.Type == "unavailable" {
 		return true
 	}
 	return false
