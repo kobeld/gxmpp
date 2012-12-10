@@ -81,10 +81,19 @@ func (c *Conn) Next(ch chan<- Stanza) {
 	}
 }
 
-// Send sends an IM message to the given user.
-func (c *Conn) SendMessage(to, msg string) error {
-	_, err := fmt.Fprintf(c.out, "<message to='%s' from='%s' type='chat'><body>%s</body></message>",
-		xmlEscape(to), xmlEscape(c.Jid), xmlEscape(msg))
+// Send an IM message to the given user.
+func (c *Conn) SendChatMessage(to, msg string) error {
+	return c.sendMessage(to, msg, "chat")
+}
+
+// Send an Im message to group chat.
+func (c *Conn) SendGroupChatMessage(to, msg string) error {
+	return c.sendMessage(to, msg, "groupchat")
+}
+
+func (c *Conn) sendMessage(to, msg, chatType string) error {
+	_, err := fmt.Fprintf(c.out, "<message to='%s' from='%s' type='%s'><body>%s</body></message>",
+		xmlEscape(to), xmlEscape(c.Jid), chatType, xmlEscape(msg))
 	return err
 }
 
@@ -471,9 +480,10 @@ type ClientMessage struct {
 	Body    string `xml:"body"`
 	Thread  string `xml:"thread"`
 
-	Active    *Active
-	Composing *Composing
-	Paused    *Paused
+	Active      *Active
+	Composing   *Composing
+	Paused      *Paused
+	ConferenceX *ConferenceX `xml:"x"`
 }
 
 type Active struct {
@@ -486,6 +496,12 @@ type Composing struct {
 
 type Paused struct {
 	XMLName xml.Name `xml:"http://jabber.org/protocol/chatstates paused"`
+}
+
+type ConferenceX struct {
+	XMLName xml.Name `xml:"jabber:x:conference x`
+	Jid     string   `xml:"jid,attr"`
+	Reason  string   `xml:"reason,attr"`
 }
 
 type ClientText struct {
